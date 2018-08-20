@@ -28,8 +28,7 @@ type upgradeParam struct {
 }
 
 var upgradeParams = []upgradeParam{
-	{0, []byte{0x00, 0x00, 0x00, 0x00}},
-	{207500, []byte{0x19, 0x1B, 0xA8, 0x5B}},
+	{347500, []byte{0x19, 0x1B, 0xA8, 0x5B}},
 }
 
 // RawTxInSignature returns the serialized ECDSA signature for the input idx of
@@ -127,13 +126,7 @@ func SignTxOutput(
 
 // sigHashKey return blake2b key by current height
 func sigHashKey(activationHeight uint32) []byte {
-	var i int
-	for i = len(upgradeParams) - 1; i >= 0; i-- {
-		if activationHeight >= upgradeParams[i].activationHeight {
-			break
-		}
-	}
-	return append([]byte(blake2BSigHash), upgradeParams[i].branchID...)
+	return append([]byte(blake2BSigHash), upgradeParams[0].branchID...)
 }
 
 // blake2bSignatureHash

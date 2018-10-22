@@ -17,8 +17,8 @@ import (
 
 const (
 	sigHashMask           = 0x1f
-	versionGroupID uint32 = 0x3C48270
-	nVersion       uint32 = 3 | (1 << 31)
+	versionGroupID uint32 = 0x892F2085
+	nVersion       uint32 = 4 | (1 << 31)
 	blake2BSigHash        = "ZcashSigHash"
 )
 
@@ -28,7 +28,7 @@ type upgradeParam struct {
 }
 
 var upgradeParams = []upgradeParam{
-	{347500, []byte{0x19, 0x1B, 0xA8, 0x5B}},
+	{419200, []byte{0xBB, 0x09, 0xB8, 0x76}},
 }
 
 // RawTxInSignature returns the serialized ECDSA signature for the input idx of

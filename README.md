@@ -1,11 +1,10 @@
 # zecutil
 
-Support only [Overwinter](https://z.cash/upgrade/overwinter.html) network upgrade for Zcash. Not support joinsplits.
+Support [Overwinter](https://z.cash/upgrade/overwinter.html) [Sapling](https://z.cash/upgrade/sapling) network upgrade for Zcash. Not support joinsplits.
 
 ```go
 zecTx := &zecutil.MsgTx{
     MsgTx:        newTx,
-    ExpiryHeight: 215039,
 }
 
 lookupKey := func(a btcutil.Address) (*btcec.PrivateKey, bool, error) {

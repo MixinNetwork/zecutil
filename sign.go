@@ -137,7 +137,7 @@ func SignTxOutput(
 func sigHashKey(activationHeight uint32) []byte {
 	var i int
 	for i = len(upgradeParams) - 1; i >= 0; i-- {
-		if activationHeight >= upgradeParams[i].activationHeight {
+		if activationHeight >= 0 {
 			break
 		}
 	}

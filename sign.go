@@ -148,6 +148,9 @@ func sigHashKey(activationHeight uint32) []byte {
 			break
 		}
 	}
+	if activationHeight == 0 {
+		i = len(upgradeParams) - 1
+	}
 
 	return append([]byte(blake2BSigHash), upgradeParams[i].BranchID...)
 }

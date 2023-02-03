@@ -7,12 +7,13 @@ import (
 	"fmt"
 	"math"
 
-	"github.com/btcsuite/btcd/btcec"
+	"github.com/btcsuite/btcd/btcec/v2"
+	"github.com/btcsuite/btcd/btcec/v2/ecdsa"
+	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
-	"github.com/btcsuite/btcutil"
 )
 
 type upgradeParam struct {
@@ -60,20 +61,14 @@ func RawTxInSignature(
 	amt int64,
 ) (_ []byte, err error) {
 	var cache *txscript.TxSigHashes
-	if cache, err = NewTxSigHashes(tx); err != nil {
-		return nil, err
-	}
+	cache = NewTxSigHashes(tx)
 
 	bHash, err := blake2bSignatureHash(subScript, cache, hashType, tx, idx, amt)
 	if err != nil {
 		return nil, err
 	}
 
-	signature, err := key.Sign(bHash)
-	if err != nil {
-		return nil, fmt.Errorf("cannot sign tx input: %s", err)
-	}
-
+	signature := ecdsa.Sign(key, bHash)
 	return append(signature.Serialize(), byte(hashType)), nil
 }
 
@@ -203,7 +198,7 @@ func blake2bSignatureHash(
 	// If anyone can pay isn't active, then we can use the cached
 	// hashPrevOuts, otherwise we just write zeroes for the prev outs.
 	if hashType&txscript.SigHashAnyOneCanPay == 0 {
-		sigHash.Write(sigHashes.HashPrevOuts[:])
+		sigHash.Write(sigHashes.HashPrevOutsV0[:])
 	} else {
 		sigHash.Write(zeroHash[:])
 	}
@@ -215,7 +210,7 @@ func blake2bSignatureHash(
 	if hashType&txscript.SigHashAnyOneCanPay == 0 &&
 		hashType&sigHashMask != txscript.SigHashSingle &&
 		hashType&sigHashMask != txscript.SigHashNone {
-		sigHash.Write(sigHashes.HashSequence[:])
+		sigHash.Write(sigHashes.HashSequenceV0[:])
 	} else {
 		sigHash.Write(zeroHash[:])
 	}
@@ -226,7 +221,7 @@ func blake2bSignatureHash(
 	// we'll serialize and add only the target output index to the signature
 	// pre-image.
 	if hashType&sigHashMask != txscript.SigHashSingle && hashType&sigHashMask != txscript.SigHashNone {
-		sigHash.Write(sigHashes.HashOutputs[:])
+		sigHash.Write(sigHashes.HashOutputsV0[:])
 	} else if hashType&sigHashMask == txscript.SigHashSingle && idx < len(tx.TxOut) {
 		var (
 			b bytes.Buffer
@@ -418,7 +413,7 @@ func SignatureScript(
 		return nil, err
 	}
 
-	pk := (*btcec.PublicKey)(&privKey.PublicKey)
+	pk := privKey.PubKey()
 	var pkData []byte
 	if compress {
 		pkData = pk.SerializeCompressed()

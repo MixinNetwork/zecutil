@@ -53,25 +53,23 @@ func NewTxSigHashes(tx *MsgTx) *txscript.TxSigHashes {
 	//
 	// Both v0 and v1 share this base data computed using a sha256 single
 	// hash.
-	sigHashes.HashPrevOutsV1 = calcHashPrevOuts(tx)
-	sigHashes.HashSequenceV1 = calcHashSequence(tx)
-	sigHashes.HashOutputsV1 = calcHashOutputs(tx)
+	// sigHashes.HashPrevOutsV1 = calcHashPrevOuts(tx)
+	// sigHashes.HashSequenceV1 = calcHashSequence(tx)
+	// sigHashes.HashOutputsV1 = calcHashOutputs(tx)
 
 	// The v0 data is the same as the v1 (newer data) but it uses a double
 	// hash instead.
 	if hasV0Inputs {
 		sigHashes.HashPrevOutsV0 = chainhash.HashH(
-			sigHashes.HashPrevOutsV1[:],
+			sigHashes.HashPrevOutsV0[:],
 		)
 		sigHashes.HashSequenceV0 = chainhash.HashH(
-			sigHashes.HashSequenceV1[:],
+			sigHashes.HashSequenceV0[:],
 		)
 		sigHashes.HashOutputsV0 = chainhash.HashH(
-			sigHashes.HashOutputsV1[:],
+			sigHashes.HashOutputsV0[:],
 		)
 	}
-
-	// Finally, we'll compute the taproot specific data if needed.
 
 	return &sigHashes
 }

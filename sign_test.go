@@ -41,7 +41,7 @@ func TestSign(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	newTx := wire.NewMsgTx(3)
+	newTx := wire.NewMsgTx(4)
 	txIn := wire.NewTxIn(wire.NewOutPoint(ph, 1), nil, nil)
 	newTx.AddTxIn(txIn)
 
@@ -106,8 +106,10 @@ func TestSign(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	final := "030000807082c403011c15616e8b9a75ad4079a17bb296bcba8bda2712453baf1bde447bfe46be46e4010000006b48304502210093f8edae9784fee695d5ac5f84b4217084345a53c31c9e1e8e2a183ebe15cace02206872d90d0af77a4a4c18b761cf511e4583597ee5503e0e82e491da0f1a4377ed012103362327ee808f5961d26ef1a431386d6190638d67c14aa0e78e2eba1b58870cc0ffffffff02400d0300000000001976a9143b535da0ba90dad71ea005cccfe3cca47d746b3a88ac70d2dd11000000001976a914aefaebf9c83deba2ec76e080e2cec850dec161b188ac00000000ff47030000"
-	if fmt.Sprintf("%x", buf.Bytes()) != final {
+	final := "0400008085202f89011c15616e8b9a75ad4079a17bb296bcba8bda2712453baf1bde447bfe46be46e4010000006a47304402202f13fe049c2fc1e83c0c8a5ab4fb46d3d05385df394e4225945238b93c8766f5022030cbbe12107987842ec71d6b102fa8a6860b0e897a2a176707ca52fc3f1604ca012103362327ee808f5961d26ef1a431386d6190638d67c14aa0e78e2eba1b58870cc0ffffffff02400d0300000000001976a9143b535da0ba90dad71ea005cccfe3cca47d746b3a88ac70d2dd11000000001976a914aefaebf9c83deba2ec76e080e2cec850dec161b188ac00000000ff4703000000000000000000000000"
+	fmt.Println(final)
+	fmt.Println(hex.EncodeToString(buf.Bytes()))
+	if hex.EncodeToString(buf.Bytes()) != final {
 		t.Fatal("incorrect sig")
 	}
 }
@@ -129,7 +131,7 @@ func TestHash(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	newTx := wire.NewMsgTx(3)
+	newTx := wire.NewMsgTx(4)
 	txIn := wire.NewTxIn(wire.NewOutPoint(ph, 1), ss, nil)
 	newTx.AddTxIn(txIn)
 

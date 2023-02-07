@@ -61,7 +61,9 @@ func RawTxInSignature(
 	amt int64,
 ) (_ []byte, err error) {
 	var cache *txscript.TxSigHashes
-	cache = NewTxSigHashes(tx)
+	if cache, err = NewTxSigHashes(tx); err != nil {
+		return nil, err
+	}
 
 	bHash, err := blake2bSignatureHash(subScript, cache, hashType, tx, idx, amt)
 	if err != nil {

@@ -16,11 +16,6 @@ import (
 	"github.com/btcsuite/btcd/wire"
 )
 
-type upgradeParam struct {
-	ActivationHeight uint32
-	BranchID         []byte
-}
-
 const (
 	sigHashMask    = 0x1f
 	blake2BSigHash = "ZcashSigHash"
@@ -28,27 +23,13 @@ const (
 
 const (
 	versionOverwinter int32 = 3
-	versionSapling          = 4
+	versionSapling    int32 = 4
 )
 
 const (
 	versionOverwinterGroupID uint32 = 0x3C48270
-	versionSaplingGroupID           = 0x892f2085
+	versionSaplingGroupID    uint32 = 0x892f2085
 )
-
-// https://github.com/zcash/zcash/blob/89f5ee5dec3fdfd70202baeaf74f09fa32bfb1a8/src/chainparams.cpp#L99
-// https://github.com/zcash/zcash/blob/master/src/consensus/upgrades.cpp#L11
-// activation levels are used for testnet because mainnet is already updated
-// TODO: need implement own complete chain params and use them
-var upgradeParams = []upgradeParam{
-	{0, []byte{0x00, 0x00, 0x00, 0x00}},
-	{347500, []byte{0x19, 0x1B, 0xA8, 0x5B}},
-	{419200, []byte{0xBB, 0x09, 0xB8, 0x76}},
-	{653600, []byte{0x60, 0x0E, 0xB4, 0x2B}},
-	{903000, []byte{0x0B, 0x23, 0xB9, 0xF5}},
-	{1046400, []byte{0xA6, 0x75, 0xFF, 0xE9}},
-	{1687104, []byte{0xB4, 0xD0, 0xD6, 0xC2}},
-}
 
 // RawTxInSignature returns the serialized ECDSA signature for the input idx of
 // the given transaction, with hashType appended to it.
@@ -141,18 +122,13 @@ func SignTxOutput(
 }
 
 // sigHashKey return blake2b key by current height
-func sigHashKey(activationHeight uint32) []byte {
-	var i int
-	for i = len(upgradeParams) - 1; i >= 0; i-- {
-		if activationHeight >= upgradeParams[i].ActivationHeight {
-			break
-		}
-	}
-	if activationHeight == 0 {
-		i = len(upgradeParams) - 1
-	}
-
-	return append([]byte(blake2BSigHash), upgradeParams[i].BranchID...)
+func sigHashKey() []byte {
+	// https://github.com/zcash/zcash/blob/89f5ee5dec3fdfd70202baeaf74f09fa32bfb1a8/src/chainparams.cpp#L99
+	// https://github.com/zcash/zcash/blob/master/src/consensus/upgrades.cpp#L11
+	// activation levels are used for testnet because mainnet is already updated
+	// TODO: need implement own complete chain params and use them
+	branchID := []byte{0x55, 0x10, 0xE7, 0xC8} // NU6 2726400 0xC8E71055
+	return append([]byte(blake2BSigHash), branchID...)
 }
 
 // blake2bSignatureHash
@@ -261,7 +237,7 @@ func blake2bSignatureHash(
 
 	// << nExpiryHeight
 	var expiryTime [4]byte
-	binary.LittleEndian.PutUint32(expiryTime[:], tx.ExpiryHeight)
+	binary.LittleEndian.PutUint32(expiryTime[:], tx.expiryHeight)
 	sigHash.Write(expiryTime[:])
 
 	// << valueBalance
@@ -307,7 +283,7 @@ func blake2bSignatureHash(
 	}
 
 	var h chainhash.Hash
-	if h, err = blake2bHash(sigHash.Bytes(), sigHashKey(tx.ExpiryHeight)); err != nil {
+	if h, err = blake2bHash(sigHash.Bytes(), sigHashKey()); err != nil {
 		return nil, err
 	}
 
@@ -427,18 +403,17 @@ func SignatureScript(
 }
 
 func mergeScripts(
-	chainParams *chaincfg.Params,
-	tx *MsgTx,
-	idx int,
-	pkScript []byte,
+	_ *chaincfg.Params,
+	_ *MsgTx,
+	_ int,
+	_ []byte,
 	class txscript.ScriptClass,
-	addresses []btcutil.Address,
-	nRequired int,
+	_ []btcutil.Address,
+	_ int,
 	sigScript,
 	prevScript []byte,
 ) []byte {
 	switch class {
-
 	// It doesn't actually make sense to merge anything other than multiig
 	// and scripthash (because it could contain multisig). Everything else
 	// has either zero signature, can't be spent, or has a single signature
@@ -449,7 +424,6 @@ func mergeScripts(
 		if len(sigScript) > len(prevScript) {
 			return sigScript
 		}
-
 		return prevScript
 	}
 }

@@ -76,8 +76,7 @@ func TestSign(t *testing.T) {
 	}
 
 	zecTx := &MsgTx{
-		MsgTx:        newTx,
-		ExpiryHeight: 215039,
+		MsgTx: newTx,
 	}
 
 	var prevTxScript []byte
@@ -106,7 +105,7 @@ func TestSign(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	final := "0400008085202f89011c15616e8b9a75ad4079a17bb296bcba8bda2712453baf1bde447bfe46be46e4010000006a47304402202f13fe049c2fc1e83c0c8a5ab4fb46d3d05385df394e4225945238b93c8766f5022030cbbe12107987842ec71d6b102fa8a6860b0e897a2a176707ca52fc3f1604ca012103362327ee808f5961d26ef1a431386d6190638d67c14aa0e78e2eba1b58870cc0ffffffff02400d0300000000001976a9143b535da0ba90dad71ea005cccfe3cca47d746b3a88ac70d2dd11000000001976a914aefaebf9c83deba2ec76e080e2cec850dec161b188ac00000000ff4703000000000000000000000000"
+	final := "0400008085202f89011c15616e8b9a75ad4079a17bb296bcba8bda2712453baf1bde447bfe46be46e4010000006a47304402203fb0de9a4a8c880d51abe478ca8de4fa40dd462e25c75cdd06fa603390f62414022005ec2b8ca6caaa10550fac931013a5c78535fefe06ae8b7aa06e8cd8dca09b04012103362327ee808f5961d26ef1a431386d6190638d67c14aa0e78e2eba1b58870cc0ffffffff02400d0300000000001976a9143b535da0ba90dad71ea005cccfe3cca47d746b3a88ac70d2dd11000000001976a914aefaebf9c83deba2ec76e080e2cec850dec161b188ac00000000000000000000000000000000000000"
 	fmt.Println(final)
 	fmt.Println(hex.EncodeToString(buf.Bytes()))
 	if hex.EncodeToString(buf.Bytes()) != final {
@@ -149,11 +148,10 @@ func TestHash(t *testing.T) {
 	newTx.AddTxOut(wire.NewTxOut(299999742, pa))
 
 	zecTx := &MsgTx{
-		MsgTx:        newTx,
-		ExpiryHeight: 219152,
+		MsgTx: newTx,
 	}
 
-	expected := "65282283bfbb131106932683d567c5b8de16bbb9186d22c5bb0d26c9e3fcb096"
+	expected := "ccae1a38b07c1d314cd0c1daa23baf6a4b2ff7f9b47046a94ccb6fadf9496ad3"
 	if zecTx.TxHash().String() != expected {
 		t.Fatal("Incorrect hash", "expected", expected, "got", zecTx.TxHash().String())
 	}

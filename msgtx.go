@@ -11,7 +11,9 @@ import (
 // MsgTx zec fork
 type MsgTx struct {
 	*wire.MsgTx
-	ExpiryHeight uint32
+
+	// https://zips.z.cash/zip-0203
+	expiryHeight uint32 // we use zero for non-limit
 }
 
 // witnessMarkerBytes are a pair of bytes specific to the witness encoding. If
@@ -76,7 +78,7 @@ func (msg *MsgTx) ZecEncode(w io.Writer, pver uint32, enc wire.MessageEncoding) 
 	}
 
 	for _, ti := range msg.TxIn {
-		err = writeTxIn(w, pver, msg.Version, ti)
+		err = writeTxIn(w, pver, ti)
 		if err != nil {
 			return err
 		}
@@ -100,7 +102,7 @@ func (msg *MsgTx) ZecEncode(w io.Writer, pver uint32, enc wire.MessageEncoding) 
 	// within the transaction.
 	if doWitness {
 		for _, ti := range msg.TxIn {
-			err = writeTxWitness(w, pver, msg.Version, ti.Witness)
+			err = writeTxWitness(w, pver, ti.Witness)
 			if err != nil {
 				return err
 			}
@@ -111,7 +113,7 @@ func (msg *MsgTx) ZecEncode(w io.Writer, pver uint32, enc wire.MessageEncoding) 
 		return err
 	}
 
-	if err = binarySerializer.PutUint32(w, littleEndian, msg.ExpiryHeight); err != nil {
+	if err = binarySerializer.PutUint32(w, littleEndian, msg.expiryHeight); err != nil {
 		return err
 	}
 
@@ -152,8 +154,8 @@ func WriteTxOut(w io.Writer, pver uint32, version int32, to *wire.TxOut) error {
 
 // writeTxIn encodes ti to the bitcoin protocol encoding for a transaction
 // input (TxIn) to w.
-func writeTxIn(w io.Writer, pver uint32, version int32, ti *wire.TxIn) error {
-	err := writeOutPoint(w, pver, version, &ti.PreviousOutPoint)
+func writeTxIn(w io.Writer, pver uint32, ti *wire.TxIn) error {
+	err := writeOutPoint(w, &ti.PreviousOutPoint)
 	if err != nil {
 		return err
 	}
@@ -168,7 +170,7 @@ func writeTxIn(w io.Writer, pver uint32, version int32, ti *wire.TxIn) error {
 
 // writeOutPoint encodes op to the bitcoin protocol encoding for an OutPoint
 // to w.
-func writeOutPoint(w io.Writer, pver uint32, version int32, op *wire.OutPoint) error {
+func writeOutPoint(w io.Writer, op *wire.OutPoint) error {
 	_, err := w.Write(op.Hash[:])
 	if err != nil {
 		return err
@@ -179,7 +181,7 @@ func writeOutPoint(w io.Writer, pver uint32, version int32, op *wire.OutPoint) e
 
 // writeTxWitness encodes the bitcoin protocol encoding for a transaction
 // input's witness into to w.
-func writeTxWitness(w io.Writer, pver uint32, version int32, wit [][]byte) error {
+func writeTxWitness(w io.Writer, pver uint32, wit [][]byte) error {
 	err := WriteVarInt(w, pver, uint64(len(wit)))
 	if err != nil {
 		return err

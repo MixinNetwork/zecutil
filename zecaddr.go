@@ -93,6 +93,9 @@ func DecodeAddress(address string, netName string) (btcutil.Address, error) {
 	if net, ok = NetList[netName]; !ok {
 		return nil, errors.New("unknown net")
 	}
+	if len(address) >= 42 {
+		return DencodeTex(address, netName)
+	}
 
 	var decoded = base58.Decode(address)
 	if len(decoded) != 26 {

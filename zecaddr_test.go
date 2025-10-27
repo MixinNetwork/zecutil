@@ -1,6 +1,7 @@
 package zecutil
 
 import (
+	"log"
 	"testing"
 
 	"github.com/btcsuite/btcd/btcutil"
@@ -60,4 +61,26 @@ func TestDecode(t *testing.T) {
 			t.Fatal("incorrect decode")
 		}
 	}
+}
+
+func TestBech32MEncodeDecode(t *testing.T) {
+	wif, err := btcutil.DecodeWIF(testWif)
+	if err != nil {
+		t.Fatal("can't parse wif")
+	}
+
+	pubKey := btcutil.Hash160(wif.PrivKey.PubKey().SerializeCompressed())
+	log.Println("pubKey:", len(pubKey))
+
+	addr, err := EncodeTex(pubKey, &chaincfg.Params{Name: "testnet3"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	log.Println("addr:", addr)
+
+	addr, err = EncodeTex(pubKey, &chaincfg.Params{Name: "mainnet"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	log.Println("addr:", addr)
 }

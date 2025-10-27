@@ -6,6 +6,7 @@ import (
 
 	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/btcutil/base58"
+	"github.com/btcsuite/btcd/btcutil/bech32"
 	"github.com/btcsuite/btcd/chaincfg"
 	"golang.org/x/crypto/ripemd160"
 )
@@ -14,6 +15,11 @@ type ChainParams struct {
 	PubHashPrefixes    []byte
 	ScriptHashPrefixes []byte
 }
+
+const (
+	MainNetHRP = "tex"
+	TestNetHRP = "textest"
+)
 
 var (
 	MainNet = ChainParams{
@@ -187,4 +193,51 @@ func addrChecksum(input []byte) (cksum [4]byte) {
 	copy(cksum[:], h2[:4])
 
 	return
+}
+
+func EncodeTex(pkHash []byte, net *chaincfg.Params) (_ string, err error) {
+	pubKey := btcutil.Hash160(pkHash)
+
+	conv, err := bech32.ConvertBits(pubKey, 8, 5, true)
+	if err != nil {
+		return "", err
+	}
+	hrp := MainNetHRP
+	switch net.Name {
+	case "mainnet":
+	case "testnet3":
+		hrp = TestNetHRP
+	default:
+		panic("unknown net")
+	}
+
+	return bech32.EncodeM(hrp, conv)
+}
+
+func DencodeTex(addr, netName string) (btcutil.Address, error) {
+	decHRP, data, _, err := bech32.DecodeGeneric(addr)
+	if err != nil {
+		return nil, err
+	}
+
+	switch netName {
+	case "mainnet":
+		if decHRP != MainNetHRP {
+			return nil, errors.New("incorrect hrp")
+		}
+	case "testnet3":
+		if decHRP != TestNetHRP {
+			return nil, errors.New("incorrect hrp")
+		}
+	default:
+		panic("unknown net")
+	}
+	orig, err := bech32.ConvertBits(data, 5, 8, false)
+	if err != nil {
+		return nil, err
+	}
+
+	address := &ZecAddressPubKeyHash{prefix: netName}
+	copy(address.hash[:], orig)
+	return address, nil
 }

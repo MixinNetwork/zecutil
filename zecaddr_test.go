@@ -82,5 +82,16 @@ func TestBech32MEncodeDecode(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	log.Println("addr:", addr)
+	log.Println("addr 1:", addr)
+
+	addrbtc, err := DecodeTex(addr, "mainnet")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	addr, err = EncodeTexFromRaw(addrbtc.ScriptAddress(), &chaincfg.Params{Name: "mainnet"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	log.Println("addr 2:", addr)
 }

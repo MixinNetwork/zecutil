@@ -94,7 +94,7 @@ func DecodeAddress(address string, netName string) (btcutil.Address, error) {
 		return nil, errors.New("unknown net")
 	}
 	if len(address) >= 42 {
-		return DencodeTex(address, netName)
+		return DecodeTex(address, netName)
 	}
 
 	var decoded = base58.Decode(address)
@@ -200,7 +200,10 @@ func addrChecksum(input []byte) (cksum [4]byte) {
 
 func EncodeTex(pkHash []byte, net *chaincfg.Params) (_ string, err error) {
 	pubKey := btcutil.Hash160(pkHash)
+	return EncodeTexFromRaw(pubKey, net)
+}
 
+func EncodeTexFromRaw(pubKey []byte, net *chaincfg.Params) (_ string, err error) {
 	conv, err := bech32.ConvertBits(pubKey, 8, 5, true)
 	if err != nil {
 		return "", err
@@ -217,7 +220,7 @@ func EncodeTex(pkHash []byte, net *chaincfg.Params) (_ string, err error) {
 	return bech32.EncodeM(hrp, conv)
 }
 
-func DencodeTex(addr, netName string) (btcutil.Address, error) {
+func DecodeTex(addr, netName string) (btcutil.Address, error) {
 	decHRP, data, _, err := bech32.DecodeGeneric(addr)
 	if err != nil {
 		return nil, err

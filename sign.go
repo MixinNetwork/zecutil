@@ -127,7 +127,7 @@ func sigHashKey() []byte {
 	// https://github.com/zcash/zcash/blob/master/src/consensus/upgrades.cpp#L11
 	// activation levels are used for testnet because mainnet is already updated
 	// TODO: need implement own complete chain params and use them
-	branchID := []byte{0x55, 0x10, 0xE7, 0xC8} // NU6 2726400 0xC8E71055
+	branchID := []byte{0xF0, 0x4D, 0xEC, 0x4D} // NU6.1 3146400 0x4DEC4DF0
 	return append([]byte(blake2BSigHash), branchID...)
 }
 
@@ -144,6 +144,12 @@ func blake2bSignatureHash(
 	// is valid.
 	if idx > len(tx.TxIn)-1 {
 		return nil, fmt.Errorf("blake2bSignatureHash error: idx %d but %d txins", idx, len(tx.TxIn))
+	}
+	switch tx.Version {
+	case versionOverwinter:
+	case versionSapling:
+	default:
+		return nil, fmt.Errorf("blake2bSignatureHash error: version %d", tx.Version)
 	}
 
 	// We'll utilize this buffer throughout to incrementally calculate

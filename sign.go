@@ -127,7 +127,7 @@ func sigHashKey() []byte {
 	// https://github.com/zcash/zcash/blob/master/src/consensus/upgrades.cpp#L11
 	// activation levels are used for testnet because mainnet is already updated
 	// TODO: need implement own complete chain params and use them
-	branchID := []byte{0xF0, 0x4D, 0xEC, 0x4D} // NU6.1 3146400 0x4DEC4DF0
+	branchID := []byte{0x30, 0xF3, 0x37, 0x54} // NU6.2 3,364,600 0x5437F330
 	return append([]byte(blake2BSigHash), branchID...)
 }
 

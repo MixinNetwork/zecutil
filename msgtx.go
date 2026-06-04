@@ -71,7 +71,7 @@ func (msg *MsgTx) ZecEncode(w io.Writer, pver uint32, enc wire.MessageEncoding) 
 		}
 	}
 
-	count := uint64(len(msg.MsgTx.TxIn))
+	count := uint64(len(msg.TxIn))
 	err = WriteVarInt(w, pver, count)
 	if err != nil {
 		return err

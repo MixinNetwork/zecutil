@@ -14,6 +14,21 @@ type MsgTx struct {
 
 	// https://zips.z.cash/zip-0203
 	expiryHeight uint32 // we use zero for non-limit
+
+	InputAmounts []int64
+	InputScripts [][]byte
+
+	// ConsensusBranchId specifies the consensus branch ID for serialization and hashing.
+	// If zero, it defaults to defaultConsensusBranchId (NU6.2).
+	ConsensusBranchId uint32
+}
+
+// GetConsensusBranchId returns the consensus branch ID.
+func (msg *MsgTx) GetConsensusBranchId() uint32 {
+	if msg.ConsensusBranchId != 0 {
+		return msg.ConsensusBranchId
+	}
+	return defaultConsensusBranchId
 }
 
 // witnessMarkerBytes are a pair of bytes specific to the witness encoding. If
@@ -27,6 +42,111 @@ var witessMarkerBytes = []byte{0x00, 0x01}
 
 // TxHash generates the Hash for the transaction.
 func (msg *MsgTx) TxHash() chainhash.Hash {
+	if msg.Version == versionV5 {
+		var err error
+		// T.1: header_digest
+		var headerBuf bytes.Buffer
+		_ = binarySerializer.PutUint32(&headerBuf, littleEndian, uint32(msg.Version)|(1<<31))
+		_ = binarySerializer.PutUint32(&headerBuf, littleEndian, versionV5GroupID)
+		_ = binarySerializer.PutUint32(&headerBuf, littleEndian, msg.GetConsensusBranchId())
+		_ = binarySerializer.PutUint32(&headerBuf, littleEndian, msg.LockTime)
+		_ = binarySerializer.PutUint32(&headerBuf, littleEndian, msg.expiryHeight)
+		headerDigest, err := blake2bHash(headerBuf.Bytes(), []byte("ZTxIdHeadersHash"))
+		if err != nil {
+			panic(err)
+		}
+
+		// T.2a: prevouts_digest
+		var prevoutsDigest chainhash.Hash
+		if len(msg.TxIn) > 0 {
+			var buf bytes.Buffer
+			for _, ti := range msg.TxIn {
+				_, _ = buf.Write(ti.PreviousOutPoint.Hash[:])
+				_ = binarySerializer.PutUint32(&buf, littleEndian, ti.PreviousOutPoint.Index)
+			}
+			prevoutsDigest, err = blake2bHash(buf.Bytes(), []byte("ZTxIdPrevoutHash"))
+		} else {
+			prevoutsDigest, err = blake2bHash(nil, []byte("ZTxIdPrevoutHash"))
+		}
+		if err != nil {
+			panic(err)
+		}
+
+		// T.2b: sequence_digest
+		var sequenceDigest chainhash.Hash
+		if len(msg.TxIn) > 0 {
+			var buf bytes.Buffer
+			for _, ti := range msg.TxIn {
+				_ = binarySerializer.PutUint32(&buf, littleEndian, ti.Sequence)
+			}
+			sequenceDigest, err = blake2bHash(buf.Bytes(), []byte("ZTxIdSequencHash"))
+		} else {
+			sequenceDigest, err = blake2bHash(nil, []byte("ZTxIdSequencHash"))
+		}
+		if err != nil {
+			panic(err)
+		}
+
+		// T.2c: outputs_digest
+		var outputsDigest chainhash.Hash
+		if len(msg.TxOut) > 0 {
+			var buf bytes.Buffer
+			for _, to := range msg.TxOut {
+				_ = WriteTxOut(&buf, 0, msg.Version, to)
+			}
+			outputsDigest, err = blake2bHash(buf.Bytes(), []byte("ZTxIdOutputsHash"))
+		} else {
+			outputsDigest, err = blake2bHash(nil, []byte("ZTxIdOutputsHash"))
+		}
+		if err != nil {
+			panic(err)
+		}
+
+		// T.2: transparent_digest
+		var transparentDigest chainhash.Hash
+		if len(msg.TxIn) == 0 && len(msg.TxOut) == 0 {
+			transparentDigest, err = blake2bHash(nil, []byte("ZTxIdTranspaHash"))
+		} else {
+			var buf bytes.Buffer
+			_, _ = buf.Write(prevoutsDigest[:])
+			_, _ = buf.Write(sequenceDigest[:])
+			_, _ = buf.Write(outputsDigest[:])
+			transparentDigest, err = blake2bHash(buf.Bytes(), []byte("ZTxIdTranspaHash"))
+		}
+		if err != nil {
+			panic(err)
+		}
+
+		// T.3: sapling_digest (empty)
+		saplingDigest, err := blake2bHash(nil, []byte("ZTxIdSaplingHash"))
+		if err != nil {
+			panic(err)
+		}
+
+		// T.4: orchard_digest (empty)
+		orchardDigest, err := blake2bHash(nil, []byte("ZTxIdOrchardHash"))
+		if err != nil {
+			panic(err)
+		}
+
+		// Top level txid_digest
+		var txidBuf bytes.Buffer
+		_, _ = txidBuf.Write(headerDigest[:])
+		_, _ = txidBuf.Write(transparentDigest[:])
+		_, _ = txidBuf.Write(saplingDigest[:])
+		_, _ = txidBuf.Write(orchardDigest[:])
+
+		var consensusBranchIdLE [4]byte
+		littleEndian.PutUint32(consensusBranchIdLE[:], msg.GetConsensusBranchId())
+		txidPersonalization := append([]byte("ZcashTxHash_"), consensusBranchIdLE[:]...)
+
+		txidDigest, err := blake2bHash(txidBuf.Bytes(), txidPersonalization)
+		if err != nil {
+			panic(err)
+		}
+		return txidDigest
+	}
+
 	var buf bytes.Buffer
 	_ = msg.ZecEncode(&buf, 0, wire.BaseEncoding)
 	return chainhash.DoubleHashH(buf.Bytes())
@@ -36,8 +156,80 @@ func (msg *MsgTx) TxHash() chainhash.Hash {
 // This is part of the Message interface implementation.
 // See Serialize for encoding transactions to be stored to disk, such as in a
 // database, as opposed to encoding transactions for the wire.
-// msg.Version must be 3 or 4 and may or may not include the overwintered flag
+// msg.Version must be 3, 4 or 5 and may or may not include the overwintered flag
 func (msg *MsgTx) ZecEncode(w io.Writer, pver uint32, enc wire.MessageEncoding) error {
+	if msg.Version == versionV5 {
+		if err := validateV5TransactionFields(msg.TxOut, msg.expiryHeight); err != nil {
+			return err
+		}
+
+		// 1. Header (0x80000005)
+		err := binarySerializer.PutUint32(w, littleEndian, uint32(msg.Version)|(1<<31))
+		if err != nil {
+			return err
+		}
+		// 2. nVersionGroupId (0x26A7270A)
+		err = binarySerializer.PutUint32(w, littleEndian, versionV5GroupID)
+		if err != nil {
+			return err
+		}
+		// 3. nConsensusBranchId
+		err = binarySerializer.PutUint32(w, littleEndian, msg.GetConsensusBranchId())
+		if err != nil {
+			return err
+		}
+		// 4. lock_time
+		err = binarySerializer.PutUint32(w, littleEndian, msg.LockTime)
+		if err != nil {
+			return err
+		}
+		// 5. nExpiryHeight
+		err = binarySerializer.PutUint32(w, littleEndian, msg.expiryHeight)
+		if err != nil {
+			return err
+		}
+		// 6. tx_in_count & tx_in
+		count := uint64(len(msg.TxIn))
+		err = WriteVarInt(w, pver, count)
+		if err != nil {
+			return err
+		}
+		for _, ti := range msg.TxIn {
+			err = writeTxIn(w, pver, ti)
+			if err != nil {
+				return err
+			}
+		}
+		// 7. tx_out_count & tx_out
+		count = uint64(len(msg.TxOut))
+		err = WriteVarInt(w, pver, count)
+		if err != nil {
+			return err
+		}
+		for _, to := range msg.TxOut {
+			err = WriteTxOut(w, pver, msg.Version, to)
+			if err != nil {
+				return err
+			}
+		}
+		// 8. nSpendsSapling = 0
+		err = WriteVarInt(w, pver, 0)
+		if err != nil {
+			return err
+		}
+		// 9. nOutputsSapling = 0
+		err = WriteVarInt(w, pver, 0)
+		if err != nil {
+			return err
+		}
+		// 10. nActionsOrchard = 0
+		err = WriteVarInt(w, pver, 0)
+		if err != nil {
+			return err
+		}
+		return nil
+	}
+
 	err := binarySerializer.PutUint32(w, littleEndian, uint32(msg.Version)|(1<<31))
 	if err != nil {
 		return err

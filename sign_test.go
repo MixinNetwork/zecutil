@@ -372,6 +372,63 @@ func TestSignV5RejectsInvalidInputMetadata(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for negative v5 input amount")
 	}
+
+	zecTx.InputAmounts[0] = maxZecMoney + 1
+	_, err = SignTxOutput(
+		netParams,
+		zecTx,
+		0,
+		prevTxScript,
+		txscript.SigHashAll,
+		txscript.KeyClosure(func(a btcutil.Address) (*btcec.PrivateKey, bool, error) {
+			return wif.PrivKey, wif.CompressPubKey, nil
+		}),
+		nil,
+		nil,
+		maxZecMoney+1)
+	if err == nil {
+		t.Fatal("expected error for v5 input amount above max money")
+	}
+}
+
+func TestSignV5RejectsInvalidOutputs(t *testing.T) {
+	zecTx, prevTxScript, wif := newV5TxForSigning(t)
+
+	for _, value := range []int64{-1, maxZecMoney + 1} {
+		zecTx.TxOut[0].Value = value
+		_, err := SignTxOutput(
+			netParams,
+			zecTx,
+			0,
+			prevTxScript,
+			txscript.SigHashAll,
+			txscript.KeyClosure(func(a btcutil.Address) (*btcec.PrivateKey, bool, error) {
+				return wif.PrivKey, wif.CompressPubKey, nil
+			}),
+			nil,
+			nil,
+			300000000)
+		if err == nil {
+			t.Fatalf("expected error for invalid v5 output amount %d", value)
+		}
+	}
+}
+
+func TestZecEncodeV5RejectsInvalidConsensusFields(t *testing.T) {
+	zecTx, _, _ := newV5TxForSigning(t)
+
+	zecTx.expiryHeight = maxExpiryHeight + 1
+	var buf bytes.Buffer
+	if err := zecTx.ZecEncode(&buf, 0, wire.BaseEncoding); err == nil {
+		t.Fatal("expected error for invalid v5 expiry height")
+	}
+
+	zecTx.expiryHeight = 0
+	zecTx.TxOut[0].Value = -1
+	buf.Reset()
+	if err := zecTx.ZecEncode(&buf, 0, wire.BaseEncoding); err == nil {
+		t.Fatal("expected error for invalid v5 output amount")
+	}
 }
 
 func TestSignV5RejectsInvalidHashTypes(t *testing.T) {

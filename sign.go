@@ -5,7 +5,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"math"
 
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/btcec/v2/ecdsa"
@@ -32,6 +31,9 @@ const (
 	versionSaplingGroupID    uint32 = 0x892f2085
 	versionV5GroupID         uint32 = 0x26a7270a
 	defaultConsensusBranchId uint32 = 0x5437f330 // NU6.2
+
+	maxZecMoney     int64  = 21_000_000 * 100_000_000
+	maxExpiryHeight uint32 = 499_999_999
 )
 
 // RawTxInSignature returns the serialized ECDSA signature for the input idx of
@@ -124,7 +126,7 @@ func SignTxOutput(
 	return mergedScript, nil
 }
 
-// sigHashKey return blake2b key by current height
+// sigHashKey returns the blake2b personalization key derived from the tx consensus branch ID.
 func sigHashKey(tx *MsgTx) []byte {
 	// https://github.com/zcash/zcash/blob/89f5ee5dec3fdfd70202baeaf74f09fa32bfb1a8/src/chainparams.cpp#L99
 	// https://github.com/zcash/zcash/blob/master/src/consensus/upgrades.cpp#L11
@@ -147,6 +149,28 @@ func isValidV5SigHashType(hashType txscript.SigHashType) bool {
 	default:
 		return false
 	}
+}
+
+func validateZecAmount(amount int64, field string) error {
+	if amount < 0 {
+		return fmt.Errorf("%s amount %d is negative", field, amount)
+	}
+	if amount > maxZecMoney {
+		return fmt.Errorf("%s amount %d exceeds max money %d", field, amount, maxZecMoney)
+	}
+	return nil
+}
+
+func validateV5TransactionFields(txOut []*wire.TxOut, expiryHeight uint32) error {
+	if expiryHeight > maxExpiryHeight {
+		return fmt.Errorf("expiry height %d exceeds max expiry height %d", expiryHeight, maxExpiryHeight)
+	}
+	for idx, out := range txOut {
+		if err := validateZecAmount(out.Value, fmt.Sprintf("output %d", idx)); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // blake2bSignatureHash
@@ -172,6 +196,9 @@ func blake2bSignatureHash(
 	}
 
 	if tx.Version == versionV5 {
+		if err := validateV5TransactionFields(tx.TxOut, tx.expiryHeight); err != nil {
+			return nil, err
+		}
 		if !isValidV5SigHashType(hashType) {
 			return nil, fmt.Errorf("blake2bSignatureHash error: invalid v5 hash type %d", hashType)
 		}
@@ -188,8 +215,8 @@ func blake2bSignatureHash(
 			return nil, fmt.Errorf("blake2bSignatureHash error: amount %d does not match input amount %d", amt, tx.InputAmounts[idx])
 		}
 		for inputIdx, inputAmount := range tx.InputAmounts {
-			if inputAmount < 0 {
-				return nil, fmt.Errorf("blake2bSignatureHash error: negative input amount %d at index %d", inputAmount, inputIdx)
+			if err := validateZecAmount(inputAmount, fmt.Sprintf("input %d", inputIdx)); err != nil {
+				return nil, fmt.Errorf("blake2bSignatureHash error: %w", err)
 			}
 		}
 
@@ -286,18 +313,13 @@ func blake2bSignatureHash(
 		}
 
 		// S.2g: txin_sig_digest
-		var txinDigest chainhash.Hash
-		if idx != math.MaxUint32 {
-			var buf bytes.Buffer
-			_, _ = buf.Write(tx.TxIn[idx].PreviousOutPoint.Hash[:])
-			_ = binary.Write(&buf, binary.LittleEndian, tx.TxIn[idx].PreviousOutPoint.Index)
-			_ = binary.Write(&buf, binary.LittleEndian, amt)
-			_ = wire.WriteVarBytes(&buf, 0, tx.InputScripts[idx])
-			_ = binary.Write(&buf, binary.LittleEndian, tx.TxIn[idx].Sequence)
-			txinDigest, err = blake2bHash(buf.Bytes(), []byte("Zcash___TxInHash"))
-		} else {
-			txinDigest, err = blake2bHash(nil, []byte("Zcash___TxInHash"))
-		}
+		var buf bytes.Buffer
+		_, _ = buf.Write(tx.TxIn[idx].PreviousOutPoint.Hash[:])
+		_ = binary.Write(&buf, binary.LittleEndian, tx.TxIn[idx].PreviousOutPoint.Index)
+		_ = binary.Write(&buf, binary.LittleEndian, tx.InputAmounts[idx])
+		_ = wire.WriteVarBytes(&buf, 0, tx.InputScripts[idx])
+		_ = binary.Write(&buf, binary.LittleEndian, tx.TxIn[idx].Sequence)
+		txinDigest, err := blake2bHash(buf.Bytes(), []byte("Zcash___TxInHash"))
 		if err != nil {
 			return nil, err
 		}
@@ -455,35 +477,33 @@ func blake2bSignatureHash(
 	binary.LittleEndian.PutUint32(bHashType[:], uint32(hashType))
 	sigHash.Write(bHashType[:])
 
-	if idx != math.MaxUint32 {
-		// << prevout
-		// Next, write the outpoint being spent.
-		sigHash.Write(tx.TxIn[idx].PreviousOutPoint.Hash[:])
-		var bIndex [4]byte
-		binary.LittleEndian.PutUint32(bIndex[:], tx.TxIn[idx].PreviousOutPoint.Index)
-		sigHash.Write(bIndex[:])
+	// << prevout
+	// Next, write the outpoint being spent.
+	sigHash.Write(tx.TxIn[idx].PreviousOutPoint.Hash[:])
+	var bIndex [4]byte
+	binary.LittleEndian.PutUint32(bIndex[:], tx.TxIn[idx].PreviousOutPoint.Index)
+	sigHash.Write(bIndex[:])
 
-		// << scriptCode
-		// For p2wsh outputs, and future outputs, the script code is the
-		// original script, with all code separators removed, serialized
-		// with a var int length prefix.
-		// wire.WriteVarBytes(&sigHash, 0, subScript)
-		if err = wire.WriteVarBytes(&sigHash, 0, subScript); err != nil {
-			return nil, err
-		}
-
-		// << amount
-		// Next, add the input amount, and sequence number of the input being
-		// signed.
-		if err = binary.Write(&sigHash, binary.LittleEndian, amt); err != nil {
-			return nil, err
-		}
-
-		// << nSequence
-		var bSequence [4]byte
-		binary.LittleEndian.PutUint32(bSequence[:], tx.TxIn[idx].Sequence)
-		sigHash.Write(bSequence[:])
+	// << scriptCode
+	// For p2wsh outputs, and future outputs, the script code is the
+	// original script, with all code separators removed, serialized
+	// with a var int length prefix.
+	// wire.WriteVarBytes(&sigHash, 0, subScript)
+	if err = wire.WriteVarBytes(&sigHash, 0, subScript); err != nil {
+		return nil, err
 	}
+
+	// << amount
+	// Next, add the input amount, and sequence number of the input being
+	// signed.
+	if err = binary.Write(&sigHash, binary.LittleEndian, amt); err != nil {
+		return nil, err
+	}
+
+	// << nSequence
+	var bSequence [4]byte
+	binary.LittleEndian.PutUint32(bSequence[:], tx.TxIn[idx].Sequence)
+	sigHash.Write(bSequence[:])
 
 	var h chainhash.Hash
 	if h, err = blake2bHash(sigHash.Bytes(), sigHashKey(tx)); err != nil {

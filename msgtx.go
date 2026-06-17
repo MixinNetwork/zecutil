@@ -31,7 +31,6 @@ func (msg *MsgTx) GetConsensusBranchId() uint32 {
 	return defaultConsensusBranchId
 }
 
-
 // witnessMarkerBytes are a pair of bytes specific to the witness encoding. If
 // this sequence is encoutered, then it indicates a transaction has iwtness
 // data. The first byte is an always 0x00 marker byte, which allows decoders to
@@ -157,9 +156,13 @@ func (msg *MsgTx) TxHash() chainhash.Hash {
 // This is part of the Message interface implementation.
 // See Serialize for encoding transactions to be stored to disk, such as in a
 // database, as opposed to encoding transactions for the wire.
-// msg.Version must be 3 or 4 and may or may not include the overwintered flag
+// msg.Version must be 3, 4 or 5 and may or may not include the overwintered flag
 func (msg *MsgTx) ZecEncode(w io.Writer, pver uint32, enc wire.MessageEncoding) error {
 	if msg.Version == versionV5 {
+		if err := validateV5TransactionFields(msg.TxOut, msg.expiryHeight); err != nil {
+			return err
+		}
+
 		// 1. Header (0x80000005)
 		err := binarySerializer.PutUint32(w, littleEndian, uint32(msg.Version)|(1<<31))
 		if err != nil {

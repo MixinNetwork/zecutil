@@ -31,7 +31,7 @@ const (
 	versionOverwinterGroupID uint32 = 0x3C48270
 	versionSaplingGroupID    uint32 = 0x892f2085
 	versionV5GroupID         uint32 = 0x26a7270a
-	consensusBranchId        uint32 = 0x5437f330 // NU6.2
+	defaultConsensusBranchId uint32 = 0x5437f330 // NU6.2
 )
 
 // RawTxInSignature returns the serialized ECDSA signature for the input idx of
@@ -125,12 +125,13 @@ func SignTxOutput(
 }
 
 // sigHashKey return blake2b key by current height
-func sigHashKey() []byte {
+func sigHashKey(tx *MsgTx) []byte {
 	// https://github.com/zcash/zcash/blob/89f5ee5dec3fdfd70202baeaf74f09fa32bfb1a8/src/chainparams.cpp#L99
 	// https://github.com/zcash/zcash/blob/master/src/consensus/upgrades.cpp#L11
 	// activation levels are used for testnet because mainnet is already updated
 	// TODO: need implement own complete chain params and use them
-	branchID := []byte{0x30, 0xF3, 0x37, 0x54} // NU6.2 3,364,600 0x5437F330
+	branchID := make([]byte, 4)
+	binary.LittleEndian.PutUint32(branchID, tx.GetConsensusBranchId())
 	return append([]byte(blake2BSigHash), branchID...)
 }
 
@@ -161,7 +162,7 @@ func blake2bSignatureHash(
 		var headerBuf bytes.Buffer
 		_ = binary.Write(&headerBuf, binary.LittleEndian, uint32(tx.Version)|(1<<31))
 		_ = binary.Write(&headerBuf, binary.LittleEndian, versionV5GroupID)
-		_ = binary.Write(&headerBuf, binary.LittleEndian, consensusBranchId)
+		_ = binary.Write(&headerBuf, binary.LittleEndian, tx.GetConsensusBranchId())
 		_ = binary.Write(&headerBuf, binary.LittleEndian, tx.LockTime)
 		_ = binary.Write(&headerBuf, binary.LittleEndian, tx.expiryHeight)
 		headerDigest, err := blake2bHash(headerBuf.Bytes(), []byte("ZTxIdHeadersHash"))
@@ -270,7 +271,9 @@ func blake2bSignatureHash(
 		var transparentSigDigest chainhash.Hash
 		{
 			var buf bytes.Buffer
-			_ = buf.WriteByte(byte(hashType))
+			var bHashType [4]byte
+			binary.LittleEndian.PutUint32(bHashType[:], uint32(hashType))
+			_, _ = buf.Write(bHashType[:])
 			_, _ = buf.Write(prevoutsDigest[:])
 			_, _ = buf.Write(amountsDigest[:])
 			_, _ = buf.Write(scriptpubkeysDigest[:])
@@ -303,7 +306,7 @@ func blake2bSignatureHash(
 		_, _ = sigBuf.Write(orchardDigest[:])
 
 		var consensusBranchIdLE [4]byte
-		littleEndian.PutUint32(consensusBranchIdLE[:], consensusBranchId)
+		littleEndian.PutUint32(consensusBranchIdLE[:], tx.GetConsensusBranchId())
 		sigPersonalization := append([]byte("ZcashTxHash_"), consensusBranchIdLE[:]...)
 
 		sigDigest, err := blake2bHash(sigBuf.Bytes(), sigPersonalization)
@@ -450,7 +453,7 @@ func blake2bSignatureHash(
 	}
 
 	var h chainhash.Hash
-	if h, err = blake2bHash(sigHash.Bytes(), sigHashKey()); err != nil {
+	if h, err = blake2bHash(sigHash.Bytes(), sigHashKey(tx)); err != nil {
 		return nil, err
 	}
 

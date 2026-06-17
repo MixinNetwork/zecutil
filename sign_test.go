@@ -232,6 +232,13 @@ func TestSignV5(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	t.Log("V5 Tx Raw Hex:", hex.EncodeToString(buf.Bytes()))
-	t.Log("V5 Tx Hash:", zecTx.TxHash().String())
+	final := "050000800a27a72630f337540000000000000000011c15616e8b9a75ad4079a17bb296bcba8bda2712453baf1bde447bfe46be46e4010000006b483045022100a4a96d40c62e0dd312577dfe45e57bb9af3ab47910e7e2746cd4bf17c8a460cf022010f31a19e25daa1cb77d98250cd2d078ef1adf3b4b826d8502ad8bb30dc3b570012103362327ee808f5961d26ef1a431386d6190638d67c14aa0e78e2eba1b58870cc0ffffffff02400d0300000000001976a9143b535da0ba90dad71ea005cccfe3cca47d746b3a88ac70d2dd11000000001976a914aefaebf9c83deba2ec76e080e2cec850dec161b188ac000000"
+	if hex.EncodeToString(buf.Bytes()) != final {
+		t.Fatal("incorrect v5 raw transaction serialization")
+	}
+
+	expectedHash := "101b48dea0eb34d37549383dddf9a5588636a891e413b1d2b65415c10527baf0"
+	if zecTx.TxHash().String() != expectedHash {
+		t.Fatalf("incorrect v5 transaction hash, expected: %s, got: %s", expectedHash, zecTx.TxHash().String())
+	}
 }

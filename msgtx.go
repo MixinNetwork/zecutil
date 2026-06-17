@@ -17,7 +17,20 @@ type MsgTx struct {
 
 	InputAmounts []int64
 	InputScripts [][]byte
+
+	// ConsensusBranchId specifies the consensus branch ID for serialization and hashing.
+	// If zero, it defaults to defaultConsensusBranchId (NU6.2).
+	ConsensusBranchId uint32
 }
+
+// GetConsensusBranchId returns the consensus branch ID.
+func (msg *MsgTx) GetConsensusBranchId() uint32 {
+	if msg.ConsensusBranchId != 0 {
+		return msg.ConsensusBranchId
+	}
+	return defaultConsensusBranchId
+}
+
 
 // witnessMarkerBytes are a pair of bytes specific to the witness encoding. If
 // this sequence is encoutered, then it indicates a transaction has iwtness
@@ -36,7 +49,7 @@ func (msg *MsgTx) TxHash() chainhash.Hash {
 		var headerBuf bytes.Buffer
 		_ = binarySerializer.PutUint32(&headerBuf, littleEndian, uint32(msg.Version)|(1<<31))
 		_ = binarySerializer.PutUint32(&headerBuf, littleEndian, versionV5GroupID)
-		_ = binarySerializer.PutUint32(&headerBuf, littleEndian, consensusBranchId)
+		_ = binarySerializer.PutUint32(&headerBuf, littleEndian, msg.GetConsensusBranchId())
 		_ = binarySerializer.PutUint32(&headerBuf, littleEndian, msg.LockTime)
 		_ = binarySerializer.PutUint32(&headerBuf, littleEndian, msg.expiryHeight)
 		headerDigest, err := blake2bHash(headerBuf.Bytes(), []byte("ZTxIdHeadersHash"))
@@ -125,7 +138,7 @@ func (msg *MsgTx) TxHash() chainhash.Hash {
 		_, _ = txidBuf.Write(orchardDigest[:])
 
 		var consensusBranchIdLE [4]byte
-		littleEndian.PutUint32(consensusBranchIdLE[:], consensusBranchId)
+		littleEndian.PutUint32(consensusBranchIdLE[:], msg.GetConsensusBranchId())
 		txidPersonalization := append([]byte("ZcashTxHash_"), consensusBranchIdLE[:]...)
 
 		txidDigest, err := blake2bHash(txidBuf.Bytes(), txidPersonalization)
@@ -157,8 +170,8 @@ func (msg *MsgTx) ZecEncode(w io.Writer, pver uint32, enc wire.MessageEncoding) 
 		if err != nil {
 			return err
 		}
-		// 3. nConsensusBranchId (0x5437F330)
-		err = binarySerializer.PutUint32(w, littleEndian, consensusBranchId)
+		// 3. nConsensusBranchId
+		err = binarySerializer.PutUint32(w, littleEndian, msg.GetConsensusBranchId())
 		if err != nil {
 			return err
 		}

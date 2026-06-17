@@ -135,6 +135,20 @@ func sigHashKey(tx *MsgTx) []byte {
 	return append([]byte(blake2BSigHash), branchID...)
 }
 
+func isValidV5SigHashType(hashType txscript.SigHashType) bool {
+	switch hashType {
+	case txscript.SigHashAll,
+		txscript.SigHashNone,
+		txscript.SigHashSingle,
+		txscript.SigHashAll | txscript.SigHashAnyOneCanPay,
+		txscript.SigHashNone | txscript.SigHashAnyOneCanPay,
+		txscript.SigHashSingle | txscript.SigHashAnyOneCanPay:
+		return true
+	default:
+		return false
+	}
+}
+
 // blake2bSignatureHash
 func blake2bSignatureHash(
 	subScript []byte,
@@ -146,7 +160,7 @@ func blake2bSignatureHash(
 ) (_ []byte, err error) {
 	// As a sanity check, ensure the passed input index for the transaction
 	// is valid.
-	if idx > len(tx.TxIn)-1 {
+	if idx < 0 || idx > len(tx.TxIn)-1 {
 		return nil, fmt.Errorf("blake2bSignatureHash error: idx %d but %d txins", idx, len(tx.TxIn))
 	}
 	switch tx.Version {
@@ -158,6 +172,27 @@ func blake2bSignatureHash(
 	}
 
 	if tx.Version == versionV5 {
+		if !isValidV5SigHashType(hashType) {
+			return nil, fmt.Errorf("blake2bSignatureHash error: invalid v5 hash type %d", hashType)
+		}
+		if hashType&sigHashMask == txscript.SigHashSingle && idx >= len(tx.TxOut) {
+			return nil, fmt.Errorf("blake2bSignatureHash error: SigHashSingle idx %d but %d txouts", idx, len(tx.TxOut))
+		}
+		if len(tx.InputAmounts) != len(tx.TxIn) {
+			return nil, fmt.Errorf("blake2bSignatureHash error: got %d input amounts for %d txins", len(tx.InputAmounts), len(tx.TxIn))
+		}
+		if len(tx.InputScripts) != len(tx.TxIn) {
+			return nil, fmt.Errorf("blake2bSignatureHash error: got %d input scripts for %d txins", len(tx.InputScripts), len(tx.TxIn))
+		}
+		if tx.InputAmounts[idx] != amt {
+			return nil, fmt.Errorf("blake2bSignatureHash error: amount %d does not match input amount %d", amt, tx.InputAmounts[idx])
+		}
+		for inputIdx, inputAmount := range tx.InputAmounts {
+			if inputAmount < 0 {
+				return nil, fmt.Errorf("blake2bSignatureHash error: negative input amount %d at index %d", inputAmount, inputIdx)
+			}
+		}
+
 		// S.1: header_digest
 		var headerBuf bytes.Buffer
 		_ = binary.Write(&headerBuf, binary.LittleEndian, uint32(tx.Version)|(1<<31))
@@ -257,7 +292,7 @@ func blake2bSignatureHash(
 			_, _ = buf.Write(tx.TxIn[idx].PreviousOutPoint.Hash[:])
 			_ = binary.Write(&buf, binary.LittleEndian, tx.TxIn[idx].PreviousOutPoint.Index)
 			_ = binary.Write(&buf, binary.LittleEndian, amt)
-			_ = wire.WriteVarBytes(&buf, 0, subScript)
+			_ = wire.WriteVarBytes(&buf, 0, tx.InputScripts[idx])
 			_ = binary.Write(&buf, binary.LittleEndian, tx.TxIn[idx].Sequence)
 			txinDigest, err = blake2bHash(buf.Bytes(), []byte("Zcash___TxInHash"))
 		} else {
@@ -271,9 +306,7 @@ func blake2bSignatureHash(
 		var transparentSigDigest chainhash.Hash
 		{
 			var buf bytes.Buffer
-			var bHashType [4]byte
-			binary.LittleEndian.PutUint32(bHashType[:], uint32(hashType))
-			_, _ = buf.Write(bHashType[:])
+			_ = buf.WriteByte(byte(hashType))
 			_, _ = buf.Write(prevoutsDigest[:])
 			_, _ = buf.Write(amountsDigest[:])
 			_, _ = buf.Write(scriptpubkeysDigest[:])

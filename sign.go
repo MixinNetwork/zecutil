@@ -24,11 +24,14 @@ const (
 const (
 	versionOverwinter int32 = 3
 	versionSapling    int32 = 4
+	versionV5         int32 = 5
 )
 
 const (
 	versionOverwinterGroupID uint32 = 0x3C48270
 	versionSaplingGroupID    uint32 = 0x892f2085
+	versionV5GroupID         uint32 = 0x26a7270a
+	consensusBranchId        uint32 = 0x5437f330 // NU6.2
 )
 
 // RawTxInSignature returns the serialized ECDSA signature for the input idx of
@@ -148,8 +151,166 @@ func blake2bSignatureHash(
 	switch tx.Version {
 	case versionOverwinter:
 	case versionSapling:
+	case versionV5:
 	default:
 		return nil, fmt.Errorf("blake2bSignatureHash error: version %d", tx.Version)
+	}
+
+	if tx.Version == versionV5 {
+		// S.1: header_digest
+		var headerBuf bytes.Buffer
+		_ = binary.Write(&headerBuf, binary.LittleEndian, uint32(tx.Version)|(1<<31))
+		_ = binary.Write(&headerBuf, binary.LittleEndian, versionV5GroupID)
+		_ = binary.Write(&headerBuf, binary.LittleEndian, consensusBranchId)
+		_ = binary.Write(&headerBuf, binary.LittleEndian, tx.LockTime)
+		_ = binary.Write(&headerBuf, binary.LittleEndian, tx.expiryHeight)
+		headerDigest, err := blake2bHash(headerBuf.Bytes(), []byte("ZTxIdHeadersHash"))
+		if err != nil {
+			return nil, err
+		}
+
+		// S.2b: prevouts_sig_digest
+		var prevoutsDigest chainhash.Hash
+		if hashType&txscript.SigHashAnyOneCanPay == 0 {
+			var buf bytes.Buffer
+			for _, ti := range tx.TxIn {
+				_, _ = buf.Write(ti.PreviousOutPoint.Hash[:])
+				_ = binary.Write(&buf, binary.LittleEndian, ti.PreviousOutPoint.Index)
+			}
+			prevoutsDigest, err = blake2bHash(buf.Bytes(), []byte("ZTxIdPrevoutHash"))
+		} else {
+			prevoutsDigest, err = blake2bHash(nil, []byte("ZTxIdPrevoutHash"))
+		}
+		if err != nil {
+			return nil, err
+		}
+
+		// S.2c: amounts_sig_digest
+		var amountsDigest chainhash.Hash
+		if hashType&txscript.SigHashAnyOneCanPay == 0 {
+			var buf bytes.Buffer
+			for _, val := range tx.InputAmounts {
+				_ = binary.Write(&buf, binary.LittleEndian, val)
+			}
+			amountsDigest, err = blake2bHash(buf.Bytes(), []byte("ZTxTrAmountsHash"))
+		} else {
+			amountsDigest, err = blake2bHash(nil, []byte("ZTxTrAmountsHash"))
+		}
+		if err != nil {
+			return nil, err
+		}
+
+		// S.2d: scriptpubkeys_sig_digest
+		var scriptpubkeysDigest chainhash.Hash
+		if hashType&txscript.SigHashAnyOneCanPay == 0 {
+			var buf bytes.Buffer
+			for _, script := range tx.InputScripts {
+				_ = wire.WriteVarBytes(&buf, 0, script)
+			}
+			scriptpubkeysDigest, err = blake2bHash(buf.Bytes(), []byte("ZTxTrScriptsHash"))
+		} else {
+			scriptpubkeysDigest, err = blake2bHash(nil, []byte("ZTxTrScriptsHash"))
+		}
+		if err != nil {
+			return nil, err
+		}
+
+		// S.2e: sequence_sig_digest
+		var sequenceDigest chainhash.Hash
+		if hashType&txscript.SigHashAnyOneCanPay == 0 {
+			var buf bytes.Buffer
+			for _, ti := range tx.TxIn {
+				_ = binary.Write(&buf, binary.LittleEndian, ti.Sequence)
+			}
+			sequenceDigest, err = blake2bHash(buf.Bytes(), []byte("ZTxIdSequencHash"))
+		} else {
+			sequenceDigest, err = blake2bHash(nil, []byte("ZTxIdSequencHash"))
+		}
+		if err != nil {
+			return nil, err
+		}
+
+		// S.2f: outputs_sig_digest
+		var outputsDigest chainhash.Hash
+		if hashType&sigHashMask != txscript.SigHashSingle && hashType&sigHashMask != txscript.SigHashNone {
+			var buf bytes.Buffer
+			for _, to := range tx.TxOut {
+				_ = WriteTxOut(&buf, 0, tx.Version, to)
+			}
+			outputsDigest, err = blake2bHash(buf.Bytes(), []byte("ZTxIdOutputsHash"))
+		} else if hashType&sigHashMask == txscript.SigHashSingle && idx < len(tx.TxOut) {
+			var buf bytes.Buffer
+			_ = WriteTxOut(&buf, 0, tx.Version, tx.TxOut[idx])
+			outputsDigest, err = blake2bHash(buf.Bytes(), []byte("ZTxIdOutputsHash"))
+		} else {
+			outputsDigest, err = blake2bHash(nil, []byte("ZTxIdOutputsHash"))
+		}
+		if err != nil {
+			return nil, err
+		}
+
+		// S.2g: txin_sig_digest
+		var txinDigest chainhash.Hash
+		if idx != math.MaxUint32 {
+			var buf bytes.Buffer
+			_, _ = buf.Write(tx.TxIn[idx].PreviousOutPoint.Hash[:])
+			_ = binary.Write(&buf, binary.LittleEndian, tx.TxIn[idx].PreviousOutPoint.Index)
+			_ = binary.Write(&buf, binary.LittleEndian, amt)
+			_ = wire.WriteVarBytes(&buf, 0, subScript)
+			_ = binary.Write(&buf, binary.LittleEndian, tx.TxIn[idx].Sequence)
+			txinDigest, err = blake2bHash(buf.Bytes(), []byte("Zcash___TxInHash"))
+		} else {
+			txinDigest, err = blake2bHash(nil, []byte("Zcash___TxInHash"))
+		}
+		if err != nil {
+			return nil, err
+		}
+
+		// S.2: transparent_sig_digest
+		var transparentSigDigest chainhash.Hash
+		{
+			var buf bytes.Buffer
+			_ = buf.WriteByte(byte(hashType))
+			_, _ = buf.Write(prevoutsDigest[:])
+			_, _ = buf.Write(amountsDigest[:])
+			_, _ = buf.Write(scriptpubkeysDigest[:])
+			_, _ = buf.Write(sequenceDigest[:])
+			_, _ = buf.Write(outputsDigest[:])
+			_, _ = buf.Write(txinDigest[:])
+			transparentSigDigest, err = blake2bHash(buf.Bytes(), []byte("ZTxIdTranspaHash"))
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		// S.3: sapling_digest (empty)
+		saplingDigest, err := blake2bHash(nil, []byte("ZTxIdSaplingHash"))
+		if err != nil {
+			return nil, err
+		}
+
+		// S.4: orchard_digest (empty)
+		orchardDigest, err := blake2bHash(nil, []byte("ZTxIdOrchardHash"))
+		if err != nil {
+			return nil, err
+		}
+
+		// Combine to signature_digest
+		var sigBuf bytes.Buffer
+		_, _ = sigBuf.Write(headerDigest[:])
+		_, _ = sigBuf.Write(transparentSigDigest[:])
+		_, _ = sigBuf.Write(saplingDigest[:])
+		_, _ = sigBuf.Write(orchardDigest[:])
+
+		var consensusBranchIdLE [4]byte
+		littleEndian.PutUint32(consensusBranchIdLE[:], consensusBranchId)
+		sigPersonalization := append([]byte("ZcashTxHash_"), consensusBranchIdLE[:]...)
+
+		sigDigest, err := blake2bHash(sigBuf.Bytes(), sigPersonalization)
+		if err != nil {
+			return nil, err
+		}
+		return sigDigest.CloneBytes(), nil
 	}
 
 	// We'll utilize this buffer throughout to incrementally calculate

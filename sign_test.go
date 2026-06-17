@@ -151,3 +151,87 @@ func TestHash(t *testing.T) {
 		t.Fatal("Incorrect hash", "expected", expected, "got", zecTx.TxHash().String())
 	}
 }
+
+func TestSignV5(t *testing.T) {
+	var (
+		wif *btcutil.WIF
+		err error
+	)
+
+	if wif, err = btcutil.DecodeWIF(testWif); err != nil {
+		t.Fatal("can't parse wif")
+	}
+
+	var ph *chainhash.Hash
+	if ph, err = chainhash.NewHashFromStr(
+		"e446be46fe7b44de1baf3b451227da8bbabc96b27ba17940ad759a8b6e61151c",
+	); err != nil {
+		t.Fatal(err)
+	}
+
+	newTx := wire.NewMsgTx(5)
+	txIn := wire.NewTxIn(wire.NewOutPoint(ph, 1), nil, nil)
+	newTx.AddTxIn(txIn)
+
+	type receiver struct {
+		addr   string
+		amount int64
+	}
+
+	receivers := []receiver{
+		{"tmF834qorixnCV18bVrkM8WN1Xasy5eXcZV", 200000},
+		{senderAddr, 299750000},
+	}
+
+	for _, receiver := range receivers {
+		decoded := base58.Decode(receiver.addr)
+		var addr *btcutil.AddressPubKeyHash
+		if addr, err = btcutil.NewAddressPubKeyHash(decoded[2:len(decoded)-4], netParams); err != nil {
+			t.Fatal(err)
+		}
+
+		receiverPkScript, err := txscript.PayToAddrScript(addr)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		txOut := wire.NewTxOut(receiver.amount, receiverPkScript)
+		newTx.AddTxOut(txOut)
+	}
+
+	var prevTxScript []byte
+	if prevTxScript, err = hex.DecodeString("76a914aefaebf9c83deba2ec76e080e2cec850dec161b188ac"); err != nil {
+		t.Fatal(err)
+	}
+
+	zecTx := &MsgTx{
+		MsgTx:        newTx,
+		InputAmounts: []int64{300000000},
+		InputScripts: [][]byte{prevTxScript},
+	}
+
+	sigScript, err := SignTxOutput(
+		netParams,
+		zecTx,
+		0,
+		prevTxScript,
+		txscript.SigHashAll,
+		txscript.KeyClosure(func(a btcutil.Address) (*btcec.PrivateKey, bool, error) {
+			return wif.PrivKey, wif.CompressPubKey, nil
+		}),
+		nil,
+		nil,
+		300000000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	txIn.SignatureScript = sigScript
+
+	var buf bytes.Buffer
+	if err = zecTx.ZecEncode(&buf, 0, wire.BaseEncoding); err != nil {
+		t.Fatal(err)
+	}
+
+	t.Log("V5 Tx Raw Hex:", hex.EncodeToString(buf.Bytes()))
+	t.Log("V5 Tx Hash:", zecTx.TxHash().String())
+}

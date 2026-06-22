@@ -5,13 +5,14 @@ import (
 	"encoding/hex"
 	"testing"
 
+	"github.com/btcsuite/btcd/address/v2"
+	"github.com/btcsuite/btcd/address/v2/base58"
 	"github.com/btcsuite/btcd/btcec/v2"
-	"github.com/btcsuite/btcd/btcutil"
-	"github.com/btcsuite/btcd/btcutil/base58"
-	"github.com/btcsuite/btcd/chaincfg"
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
-	"github.com/btcsuite/btcd/txscript"
-	"github.com/btcsuite/btcd/wire"
+	"github.com/btcsuite/btcd/btcutil/v2"
+	"github.com/btcsuite/btcd/chaincfg/v2"
+	"github.com/btcsuite/btcd/chainhash/v2"
+	"github.com/btcsuite/btcd/txscript/v2"
+	"github.com/btcsuite/btcd/wire/v2"
 )
 
 const (
@@ -53,7 +54,7 @@ func newV5TxForSigning(t *testing.T) (*MsgTx, []byte, *btcutil.WIF) {
 
 	for _, receiver := range receivers {
 		decoded := base58.Decode(receiver.addr)
-		addr, err := btcutil.NewAddressPubKeyHash(decoded[2:len(decoded)-4], netParams)
+		addr, err := address.NewAddressPubKeyHash(decoded[2:len(decoded)-4], netParams)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -111,8 +112,8 @@ func TestSign(t *testing.T) {
 
 	for _, receiver := range receivers {
 		decoded := base58.Decode(receiver.addr)
-		var addr *btcutil.AddressPubKeyHash
-		if addr, err = btcutil.NewAddressPubKeyHash(decoded[2:len(decoded)-4], netParams); err != nil {
+		var addr *address.AddressPubKeyHash
+		if addr, err = address.NewAddressPubKeyHash(decoded[2:len(decoded)-4], netParams); err != nil {
 			t.Fatal(err)
 		}
 
@@ -139,7 +140,7 @@ func TestSign(t *testing.T) {
 		0,
 		prevTxScript,
 		txscript.SigHashAll,
-		txscript.KeyClosure(func(a btcutil.Address) (*btcec.PrivateKey, bool, error) {
+		txscript.KeyClosure(func(a address.Address) (*btcec.PrivateKey, bool, error) {
 			return wif.PrivKey, wif.CompressPubKey, nil
 		}),
 		nil,
@@ -183,8 +184,8 @@ func TestHash(t *testing.T) {
 	newTx.AddTxIn(txIn)
 
 	decoded := base58.Decode("tmHuu9Z7m5W7PcT4orLEANwnHKrB2aDfx5C")
-	var addr *btcutil.AddressPubKeyHash
-	if addr, err = btcutil.NewAddressPubKeyHash(decoded[2:len(decoded)-4], netParams); err != nil {
+	var addr *address.AddressPubKeyHash
+	if addr, err = address.NewAddressPubKeyHash(decoded[2:len(decoded)-4], netParams); err != nil {
 		t.Fatal(err)
 	}
 
@@ -238,8 +239,8 @@ func TestSignV5(t *testing.T) {
 
 	for _, receiver := range receivers {
 		decoded := base58.Decode(receiver.addr)
-		var addr *btcutil.AddressPubKeyHash
-		if addr, err = btcutil.NewAddressPubKeyHash(decoded[2:len(decoded)-4], netParams); err != nil {
+		var addr *address.AddressPubKeyHash
+		if addr, err = address.NewAddressPubKeyHash(decoded[2:len(decoded)-4], netParams); err != nil {
 			t.Fatal(err)
 		}
 
@@ -269,7 +270,7 @@ func TestSignV5(t *testing.T) {
 		0,
 		prevTxScript,
 		txscript.SigHashAll,
-		txscript.KeyClosure(func(a btcutil.Address) (*btcec.PrivateKey, bool, error) {
+		txscript.KeyClosure(func(a address.Address) (*btcec.PrivateKey, bool, error) {
 			return wif.PrivKey, wif.CompressPubKey, nil
 		}),
 		nil,
@@ -307,7 +308,7 @@ func TestSignV5RejectsMissingInputMetadata(t *testing.T) {
 		0,
 		prevTxScript,
 		txscript.SigHashAll,
-		txscript.KeyClosure(func(a btcutil.Address) (*btcec.PrivateKey, bool, error) {
+		txscript.KeyClosure(func(a address.Address) (*btcec.PrivateKey, bool, error) {
 			return wif.PrivKey, wif.CompressPubKey, nil
 		}),
 		nil,
@@ -325,7 +326,7 @@ func TestSignV5RejectsMissingInputMetadata(t *testing.T) {
 		0,
 		prevTxScript,
 		txscript.SigHashAll,
-		txscript.KeyClosure(func(a btcutil.Address) (*btcec.PrivateKey, bool, error) {
+		txscript.KeyClosure(func(a address.Address) (*btcec.PrivateKey, bool, error) {
 			return wif.PrivKey, wif.CompressPubKey, nil
 		}),
 		nil,
@@ -346,7 +347,7 @@ func TestSignV5RejectsInvalidInputMetadata(t *testing.T) {
 		0,
 		prevTxScript,
 		txscript.SigHashAll,
-		txscript.KeyClosure(func(a btcutil.Address) (*btcec.PrivateKey, bool, error) {
+		txscript.KeyClosure(func(a address.Address) (*btcec.PrivateKey, bool, error) {
 			return wif.PrivKey, wif.CompressPubKey, nil
 		}),
 		nil,
@@ -363,7 +364,7 @@ func TestSignV5RejectsInvalidInputMetadata(t *testing.T) {
 		0,
 		prevTxScript,
 		txscript.SigHashAll,
-		txscript.KeyClosure(func(a btcutil.Address) (*btcec.PrivateKey, bool, error) {
+		txscript.KeyClosure(func(a address.Address) (*btcec.PrivateKey, bool, error) {
 			return wif.PrivKey, wif.CompressPubKey, nil
 		}),
 		nil,
@@ -380,7 +381,7 @@ func TestSignV5RejectsInvalidInputMetadata(t *testing.T) {
 		0,
 		prevTxScript,
 		txscript.SigHashAll,
-		txscript.KeyClosure(func(a btcutil.Address) (*btcec.PrivateKey, bool, error) {
+		txscript.KeyClosure(func(a address.Address) (*btcec.PrivateKey, bool, error) {
 			return wif.PrivKey, wif.CompressPubKey, nil
 		}),
 		nil,
@@ -402,7 +403,7 @@ func TestSignV5RejectsInvalidOutputs(t *testing.T) {
 			0,
 			prevTxScript,
 			txscript.SigHashAll,
-			txscript.KeyClosure(func(a btcutil.Address) (*btcec.PrivateKey, bool, error) {
+			txscript.KeyClosure(func(a address.Address) (*btcec.PrivateKey, bool, error) {
 				return wif.PrivKey, wif.CompressPubKey, nil
 			}),
 			nil,
@@ -444,7 +445,7 @@ func TestSignV5RejectsInvalidHashTypes(t *testing.T) {
 			0,
 			prevTxScript,
 			hashType,
-			txscript.KeyClosure(func(a btcutil.Address) (*btcec.PrivateKey, bool, error) {
+			txscript.KeyClosure(func(a address.Address) (*btcec.PrivateKey, bool, error) {
 				return wif.PrivKey, wif.CompressPubKey, nil
 			}),
 			nil,
@@ -466,7 +467,7 @@ func TestSignV5RejectsSigHashSingleWithoutOutput(t *testing.T) {
 		0,
 		prevTxScript,
 		txscript.SigHashSingle,
-		txscript.KeyClosure(func(a btcutil.Address) (*btcec.PrivateKey, bool, error) {
+		txscript.KeyClosure(func(a address.Address) (*btcec.PrivateKey, bool, error) {
 			return wif.PrivKey, wif.CompressPubKey, nil
 		}),
 		nil,
@@ -486,7 +487,7 @@ func TestV5SignatureHashUsesInputScriptPubKey(t *testing.T) {
 	}
 	scriptPubKey, err := txscript.NewScriptBuilder().
 		AddOp(txscript.OP_HASH160).
-		AddData(btcutil.Hash160(redeemScript)).
+		AddData(address.Hash160(redeemScript)).
 		AddOp(txscript.OP_EQUAL).
 		Script()
 	if err != nil {

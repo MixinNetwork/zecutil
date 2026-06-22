@@ -4,11 +4,11 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/btcsuite/btcd/btcutil"
-	"github.com/btcsuite/btcd/txscript"
+	"github.com/btcsuite/btcd/address/v2"
+	"github.com/btcsuite/btcd/txscript/v2"
 )
 
-func PayToAddrScript(addr btcutil.Address) ([]byte, error) {
+func PayToAddrScript(addr address.Address) ([]byte, error) {
 	var script []byte
 	var err error
 	script, err = txscript.PayToAddrScript(addr)

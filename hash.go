@@ -1,7 +1,7 @@
 package zecutil
 
 import (
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
+	"github.com/btcsuite/btcd/chainhash/v2"
 	"github.com/dchest/blake2b"
 )
 

@@ -6,13 +6,13 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/btcsuite/btcd/address/v2"
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/btcec/v2/ecdsa"
-	"github.com/btcsuite/btcd/btcutil"
-	"github.com/btcsuite/btcd/chaincfg"
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
-	"github.com/btcsuite/btcd/txscript"
-	"github.com/btcsuite/btcd/wire"
+	"github.com/btcsuite/btcd/chaincfg/v2"
+	"github.com/btcsuite/btcd/chainhash/v2"
+	"github.com/btcsuite/btcd/txscript/v2"
+	"github.com/btcsuite/btcd/wire/v2"
 )
 
 const (
@@ -522,7 +522,7 @@ func sign(
 	kdb txscript.KeyDB,
 	sdb txscript.ScriptDB,
 	amt int64,
-) ([]byte, txscript.ScriptClass, []btcutil.Address, int, error) {
+) ([]byte, txscript.ScriptClass, []address.Address, int, error) {
 	class, addresses, nrequired, err := txscript.ExtractPkScriptAddrs(subScript, chainParams)
 	if err != nil {
 		return nil, txscript.NonStandardTy, nil, 0, err
@@ -567,7 +567,7 @@ func signMultiSig(
 	idx int,
 	subScript []byte,
 	hashType txscript.SigHashType,
-	addresses []btcutil.Address,
+	addresses []address.Address,
 	nRequired int,
 	kdb txscript.KeyDB,
 	amt int64,
@@ -631,7 +631,7 @@ func mergeScripts(
 	_ int,
 	_ []byte,
 	class txscript.ScriptClass,
-	_ []btcutil.Address,
+	_ []address.Address,
 	_ int,
 	sigScript,
 	prevScript []byte,

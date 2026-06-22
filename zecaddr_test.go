@@ -4,8 +4,9 @@ import (
 	"log"
 	"testing"
 
-	"github.com/btcsuite/btcd/btcutil"
-	"github.com/btcsuite/btcd/chaincfg"
+	"github.com/btcsuite/btcd/address/v2"
+	"github.com/btcsuite/btcd/btcutil/v2"
+	"github.com/btcsuite/btcd/chaincfg/v2"
 )
 
 func TestEncode(t *testing.T) {
@@ -69,7 +70,7 @@ func TestBech32MEncodeDecode(t *testing.T) {
 		t.Fatal("can't parse wif")
 	}
 
-	pubKey := btcutil.Hash160(wif.PrivKey.PubKey().SerializeCompressed())
+	pubKey := address.Hash160(wif.PrivKey.PubKey().SerializeCompressed())
 	log.Println("pubKey:", len(pubKey))
 
 	addr, err := EncodeTex(pubKey, &chaincfg.Params{Name: "testnet3"})

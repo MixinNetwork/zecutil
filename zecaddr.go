@@ -4,11 +4,10 @@ import (
 	"crypto/sha256"
 	"errors"
 
-	"github.com/btcsuite/btcd/btcutil"
-	"github.com/btcsuite/btcd/btcutil/base58"
-	"github.com/btcsuite/btcd/btcutil/bech32"
-	"github.com/btcsuite/btcd/chaincfg"
-	"golang.org/x/crypto/ripemd160"
+	"github.com/btcsuite/btcd/address/v2"
+	"github.com/btcsuite/btcd/address/v2/base58"
+	"github.com/btcsuite/btcd/address/v2/bech32"
+	"github.com/btcsuite/btcd/chaincfg/v2"
 )
 
 type ChainParams struct {
@@ -17,8 +16,9 @@ type ChainParams struct {
 }
 
 const (
-	MainNetHRP = "tex"
-	TestNetHRP = "textest"
+	Ripemd160Size = 20
+	MainNetHRP    = "tex"
+	TestNetHRP    = "textest"
 )
 
 var (
@@ -40,16 +40,16 @@ var (
 )
 
 type ZecAddressScriptHash struct {
-	hash   [ripemd160.Size]byte
+	hash   [Ripemd160Size]byte
 	prefix string
 }
 
 type ZecAddressPubKeyHash struct {
-	hash   [ripemd160.Size]byte
+	hash   [Ripemd160Size]byte
 	prefix string
 }
 
-func NewAddressPubKeyHash(hash [ripemd160.Size]byte, prefix string) *ZecAddressPubKeyHash {
+func NewAddressPubKeyHash(hash [Ripemd160Size]byte, prefix string) *ZecAddressPubKeyHash {
 	return &ZecAddressPubKeyHash{hash, prefix}
 }
 
@@ -59,21 +59,21 @@ func Encode(pkHash []byte, net *chaincfg.Params) (_ string, err error) {
 		return "", errors.New("unknown network parameters")
 	}
 
-	var addrPubKey *btcutil.AddressPubKey
-	if addrPubKey, err = btcutil.NewAddressPubKey(pkHash, net); err != nil {
+	var addrPubKey *address.AddressPubKey
+	if addrPubKey, err = address.NewAddressPubKey(pkHash, net); err != nil {
 		return "", err
 	}
 
-	return EncodeHash(btcutil.Hash160(addrPubKey.ScriptAddress())[:ripemd160.Size], NetList[net.Name].PubHashPrefixes)
+	return EncodeHash(address.Hash160(addrPubKey.ScriptAddress())[:Ripemd160Size], NetList[net.Name].PubHashPrefixes)
 }
 
 func EncodeHash(addrHash []byte, prefix []byte) (_ string, err error) {
-	if len(addrHash) != ripemd160.Size {
+	if len(addrHash) != Ripemd160Size {
 		return "", errors.New("incorrect hash length")
 	}
 
 	var (
-		body  = append(prefix, addrHash[:ripemd160.Size]...)
+		body  = append(prefix, addrHash[:Ripemd160Size]...)
 		chk   = addrChecksum(body)
 		cksum [4]byte
 	)
@@ -84,7 +84,7 @@ func EncodeHash(addrHash []byte, prefix []byte) (_ string, err error) {
 }
 
 // DecodeAddress zec address string
-func DecodeAddress(address string, netName string) (btcutil.Address, error) {
+func DecodeAddress(address string, netName string) (address.Address, error) {
 	var (
 		net ChainParams
 		ok  bool
@@ -109,7 +109,7 @@ func DecodeAddress(address string, netName string) (btcutil.Address, error) {
 		return nil, base58.ErrChecksum
 	}
 
-	if len(decoded)-6 != ripemd160.Size {
+	if len(decoded)-6 != Ripemd160Size {
 		return nil, errors.New("incorrect payload len")
 	}
 
@@ -199,7 +199,7 @@ func addrChecksum(input []byte) (cksum [4]byte) {
 }
 
 func EncodeTex(pkHash []byte, net *chaincfg.Params) (_ string, err error) {
-	pubKey := btcutil.Hash160(pkHash)
+	pubKey := address.Hash160(pkHash)
 	return EncodeTexFromRaw(pubKey, net)
 }
 
@@ -220,7 +220,7 @@ func EncodeTexFromRaw(pubKey []byte, net *chaincfg.Params) (_ string, err error)
 	return bech32.EncodeM(hrp, conv)
 }
 
-func DecodeTex(addr, netName string) (btcutil.Address, error) {
+func DecodeTex(addr, netName string) (address.Address, error) {
 	decHRP, data, _, err := bech32.DecodeGeneric(addr)
 	if err != nil {
 		return nil, err

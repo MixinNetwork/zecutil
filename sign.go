@@ -30,7 +30,7 @@ const (
 	versionOverwinterGroupID uint32 = 0x3C48270
 	versionSaplingGroupID    uint32 = 0x892f2085
 	versionV5GroupID         uint32 = 0x26a7270a
-	defaultConsensusBranchId uint32 = 0x5437f330 // NU6.2
+	defaultConsensusBranchId uint32 = 0x37a5165b // NU6.3
 
 	maxZecMoney     int64  = 21_000_000 * 100_000_000
 	maxExpiryHeight uint32 = 499_999_999
